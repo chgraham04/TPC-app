@@ -30,43 +30,76 @@ def is_valid_date(date_str):
 # button functionality
 def place_order():
     clear_window()
-
-    # product type selection
     tk.Label(window, text="Select Product Type", font=('Georgia', 20), bg=bg_color).pack(pady=20)
     tk.Button(window, text="Ice Cream", font=('Georgia', 16), command=load_vendor_selection).pack(pady=10)
-    tk.Button(window, text="Gelato", font=('Georgia', 16), command=lambda: load_flavor_form("cfFlavors", "cold fusion")).pack(pady=10)
+    tk.Button(window, text="Gelato", font=('Georgia', 16),
+              command=lambda: load_flavor_form("cfFlavors", "cold fusion")).pack(pady=10)
 
 # vendor selection
 def load_vendor_selection():
     clear_window()
     tk.Label(window, text="Select Ice Cream Vendor", font=('Georgia', 20), bg=bg_color).pack(pady=20)
-    tk.Button(window, text="Crescent Ridge", font=('Georgia', 16), command=lambda: load_flavor_form("CrescentFlavors", "crescent ridge")).pack(pady=10)
-    tk.Button(window, text="Warwick", font=('Georgia', 16), command=lambda: load_flavor_form("WarwickFlavors", "warwick")).pack(pady=10)
+    tk.Button(window, text="Crescent Ridge", font=('Georgia', 16),
+              command=lambda: load_flavor_form("CrescentFlavors", "crescent ridge")).pack(pady=10)
+    tk.Button(window, text="Warwick", font=('Georgia', 16),
+              command=lambda: load_flavor_form("WarwickFlavors", "warwick")).pack(pady=10)
 
-# flavor form with quantity entries
+# flavor form with scroll and centered layout
 def load_flavor_form(table_name, vendor_name):
     clear_window()
-    tk.Label(window, text=f"{vendor_name.title()} Order", font=('Georgia', 20), bg=bg_color).pack(pady=10)
 
-    frame = tk.Frame(window, bg=bg_color)
-    frame.pack()
+    # scrollable window container
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
 
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # header
+    header = tk.Label(scrollable_frame, text=f"{vendor_name.title()} Order", font=('Georgia', 20), bg=bg_color)
+    header.pack(pady=10, padx=(290,0), anchor='center')
+
+    # load flavor fields
     conn = sqlite3.connect("icecream_orders.db")
     cur = conn.cursor()
-    cur.execute(f"SELECT flavor_id, name FROM {table_name}")
+    cur.execute(f"SELECT flavor_id, name FROM {table_name} ORDER BY name ASC")
     flavors = cur.fetchall()
     conn.close()
 
     entry_widgets = {}
     for fid, name in flavors:
-        row = tk.Frame(frame, bg=bg_color)
-        row.pack(anchor='w', padx=30, pady=2)
-        tk.Label(row, text=name, width=30, anchor='w', font=('Georgia', 12), bg=bg_color).pack(side='left')
-        entry = tk.Entry(row, width=5)
+        row_outer = tk.Frame(scrollable_frame, bg=bg_color)
+        row_outer.pack(anchor='center', pady=2)
+
+        row = tk.Frame(row_outer, bg=bg_color)
+        row.pack()
+
+        tk.Label(row, text=name, width=30, anchor='e', font=('Georgia', 12), bg=bg_color).pack(side='left')
+        entry = tk.Entry(row, width=5, justify='center')
         entry.pack(side='left')
         entry_widgets[fid] = entry
 
-    # ask for date and finalize order
+    # date + buttons
+    date_label = tk.Label(scrollable_frame, text="Enter Order Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color)
+    date_label.pack(pady=(20, 5), padx=(290,0), anchor='center')
+
+    date_entry = tk.Entry(scrollable_frame, font=('Georgia', 12), justify='center')
+    date_entry.pack(anchor='center', padx=(290,0))
+
+    err_label = tk.Label(scrollable_frame, text="", font=('Georgia', 10), fg="red", bg=bg_color)
+    err_label.pack(anchor='center', padx=(290,0))
+
     def finalize_order():
         date_str = date_entry.get().strip()
         if not is_valid_date(date_str):
@@ -92,14 +125,8 @@ def load_flavor_form(table_name, vendor_name):
         conn.close()
         show_main_menu()
 
-    # date entry and submit
-    tk.Label(window, text="Enter Order Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=10)
-    date_entry = tk.Entry(window, font=('Georgia', 12))
-    date_entry.pack()
-    err_label = tk.Label(window, text="", font=('Georgia', 10), fg="red", bg=bg_color)
-    err_label.pack()
-    tk.Button(window, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20)
-    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
+    tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20, padx=(290,0), anchor='center')
+    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5, padx=(290,0), anchor='center')
 
 def review_order():
     return
@@ -122,7 +149,7 @@ def show_main_menu():
                            fg='black',
                            bd=0,
                            highlightthickness=0)
-    title_label.pack(pady=(10, 50))
+    title_label.pack(pady=(10, 50), anchor='center')
 
     # inventory management subtitle
     sub_inventory = tk.Label(master=window,
@@ -132,7 +159,7 @@ def show_main_menu():
                              fg='black',
                              bd=0,
                              highlightthickness=0)
-    sub_inventory.pack(pady=0)
+    sub_inventory.pack(pady=0, anchor='center')
 
     # input field
     main_menu = tk.Frame(master=window,
