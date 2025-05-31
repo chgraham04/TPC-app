@@ -284,7 +284,58 @@ def add_flavor():
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
 
 def remove_flavor():
-    return
+    clear_window()
+    tk.Label(window, text="Select Vendor to Remove Flavors From", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    def vendor_choice(vendor_table, vendor_label):
+        clear_window()
+        tk.Label(window, text=f"Remove Flavors from {vendor_label.title()}", font=('Georgia', 20), bg=bg_color).pack(pady=10)
+
+        canvas_frame = tk.Frame(window)
+        canvas = tk.Canvas(canvas_frame, bg=bg_color)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=bg_color)
+
+        scrollable.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas_frame.pack(fill="both", expand=True)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute(f"SELECT flavor_id, name FROM {vendor_table} ORDER BY name ASC")
+        flavors = cur.fetchall()
+        conn.close()
+
+        vars_dict = {}
+        for fid, name in flavors:
+            var = tk.BooleanVar()
+            cb = tk.Checkbutton(scrollable, text=name, variable=var, bg=bg_color, font=('Georgia', 12))
+            cb.pack(anchor='w', padx=20)
+            vars_dict[fid] = var
+
+        def confirm_delete():
+            conn = sqlite3.connect("icecream_orders.db")
+            cur = conn.cursor()
+            deleted = 0
+            for fid, var in vars_dict.items():
+                if var.get():
+                    cur.execute(f"DELETE FROM {vendor_table} WHERE flavor_id = ?", (fid,))
+                    deleted += 1
+            conn.commit()
+            conn.close()
+            show_main_menu()
+
+        tk.Button(scrollable, text="Delete Selected", font=('Georgia', 14), command=confirm_delete).pack(pady=20)
+        tk.Button(scrollable, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
+
+    tk.Button(window, text="Warwick", font=('Georgia', 16), command=lambda: vendor_choice("WarwickFlavors", "warwick")).pack(pady=10)
+    tk.Button(window, text="Crescent Ridge", font=('Georgia', 16), command=lambda: vendor_choice("CrescentFlavors", "crescent ridge")).pack(pady=10)
+    tk.Button(window, text="Cold Fusion", font=('Georgia', 16), command=lambda: vendor_choice("cfFlavors", "cold fusion")).pack(pady=10)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
 
 def show_main_menu():
     clear_window()
