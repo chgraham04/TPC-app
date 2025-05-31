@@ -68,7 +68,7 @@ def load_flavor_form(table_name, vendor_name):
 
     # header
     header = tk.Label(scrollable_frame, text=f"{vendor_name.title()} Order", font=('Georgia', 20), bg=bg_color)
-    header.pack(pady=10, padx=(290,0), anchor='center')
+    header.pack(pady=10, padx=(280,0), anchor='center')
 
     # load flavor fields
     conn = sqlite3.connect("icecream_orders.db")
@@ -95,10 +95,10 @@ def load_flavor_form(table_name, vendor_name):
     date_label.pack(pady=(20, 5), padx=(290,0), anchor='center')
 
     date_entry = tk.Entry(scrollable_frame, font=('Georgia', 12), justify='center')
-    date_entry.pack(anchor='center', padx=(290,0))
+    date_entry.pack(anchor='center', padx=(280,0))
 
     err_label = tk.Label(scrollable_frame, text="", font=('Georgia', 10), fg="red", bg=bg_color)
-    err_label.pack(anchor='center', padx=(290,0))
+    err_label.pack(anchor='center', padx=(280,0))
 
     def finalize_order():
         date_str = date_entry.get().strip()
@@ -125,23 +125,138 @@ def load_flavor_form(table_name, vendor_name):
         conn.close()
         show_main_menu()
 
-    tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20, padx=(290,0), anchor='center')
-    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5, padx=(290,0), anchor='center')
+    tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20, padx=(280,0), anchor='center')
+    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5, padx=(280,0), anchor='center')
 
+# review orders button functionality
 def review_order():
-    return
+    clear_window()
+
+    def load_flavor_dict():
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute("SELECT flavor_id, name FROM WarwickFlavors")
+        warwick = dict(cur.fetchall())
+        cur.execute("SELECT flavor_id, name FROM CrescentFlavors")
+        crescent = dict(cur.fetchall())
+        cur.execute("SELECT flavor_id, name FROM cfFlavors")
+        cold_fusion = dict(cur.fetchall())
+        conn.close()
+        return {**warwick, **crescent, **cold_fusion}
+
+    def display_orders(filter_date=None):
+        clear_window()
+        container = tk.Frame(window)
+        canvas = tk.Canvas(container, bg=bg_color)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        container.pack(fill="both", expand=True)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+
+        if filter_date:
+            cur.execute("""
+                SELECT Orders.date, Orders.vendor, OrderDetails.flavor_id, OrderDetails.quantity
+                FROM Orders JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
+                WHERE Orders.date = ? ORDER BY Orders.order_id
+            """, (filter_date,))
+        else:
+            cur.execute("""
+                SELECT Orders.date, Orders.vendor, OrderDetails.flavor_id, OrderDetails.quantity
+                FROM Orders JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
+                ORDER BY Orders.order_id
+            """)
+        rows = cur.fetchall()
+        conn.close()
+
+        flavor_dict = load_flavor_dict()
+        last_date_vendor = None
+
+        for date, vendor, fid, qty in rows:
+            if (date, vendor) != last_date_vendor:
+                tk.Label(scrollable_frame, text=f"Date: {date} | Vendor: {vendor.title()}", font=('Georgia', 14, 'bold'), bg=bg_color).pack(pady=(10, 0))
+                last_date_vendor = (date, vendor)
+
+            fname = flavor_dict.get(fid, "Unknown Flavor")
+            tk.Label(scrollable_frame, text=f"{fname} - {qty}", font=('Georgia', 12), bg=bg_color).pack()
+
+        tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=10)
+
+    def delete_orders():
+        clear_window()
+        tk.Label(window, text="Delete Orders", font=('Georgia', 20), bg=bg_color).pack(pady=10)
+
+        date_entry = tk.Entry(window, font=('Georgia', 12), justify='center')
+        date_entry.pack(pady=5)
+        vendor_box = ttk.Combobox(window, values=["Crescent Ridge", "Warwick", "Cold Fusion"], font=('Georgia', 12), state="readonly")
+        vendor_box.pack(pady=5)
+
+        err_label = tk.Label(window, text="", font=('Georgia', 10), fg="red", bg=bg_color)
+        err_label.pack()
+
+        def confirm_delete():
+            date = date_entry.get().strip()
+            vendor = vendor_box.get().strip().lower()
+            if not is_valid_date(date):
+                err_label.config(text="Invalid date format.")
+                return
+            conn = sqlite3.connect("icecream_orders.db")
+            cur = conn.cursor()
+            cur.execute("SELECT order_id FROM Orders WHERE date = ? AND vendor = ?", (date, vendor))
+            order_ids = [row[0] for row in cur.fetchall()]
+            for oid in order_ids:
+                cur.execute("DELETE FROM OrderDetails WHERE order_id = ?", (oid,))
+                cur.execute("DELETE FROM Orders WHERE order_id = ?", (oid,))
+            conn.commit()
+            conn.close()
+            show_main_menu()
+
+        tk.Button(window, text="Delete", font=('Georgia', 12), command=confirm_delete).pack(pady=5)
+        tk.Button(window, text="Back", font=('Georgia', 12), command=review_order).pack(pady=5)
+
+    clear_window()
+    tk.Label(window, text="Review Orders", font=('Georgia', 20), bg=bg_color).pack(pady=10)
+    tk.Button(window, text="View All Orders", font=('Georgia', 14), command=lambda: display_orders()).pack(pady=5)
+    tk.Button(window, text="Find by Date", font=('Georgia', 14), command=lambda: search_by_date()).pack(pady=5)
+    tk.Button(window, text="Delete an Order", font=('Georgia', 14), command=delete_orders).pack(pady=5)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=10)
+
+    def search_by_date():
+        clear_window()
+        tk.Label(window, text="Enter Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+        date_entry = tk.Entry(window, font=('Georgia', 12), justify='center')
+        date_entry.pack(pady=5)
+        err_label = tk.Label(window, text="", font=('Georgia', 10), fg="red", bg=bg_color)
+        err_label.pack()
+
+        def search():
+            date = date_entry.get().strip()
+            if not is_valid_date(date):
+                err_label.config(text="Invalid date format.")
+                return
+            display_orders(filter_date=date)
+
+        tk.Button(window, text="Search", font=('Georgia', 12), command=search).pack(pady=5)
+        tk.Button(window, text="Back", font=('Georgia', 12), command=review_order).pack(pady=5)
 
 def add_flavor():
-    return
+    pass
 
 def remove_flavor():
-    return
+    pass
 
 # rebuild main menu
 def show_main_menu():
     clear_window()
 
-    # title 
     title_label = tk.Label(master=window,
                            text='TPC Master Application',
                            font=('Georgia', 24),
@@ -151,7 +266,6 @@ def show_main_menu():
                            highlightthickness=0)
     title_label.pack(pady=(10, 50), anchor='center')
 
-    # inventory management subtitle
     sub_inventory = tk.Label(master=window,
                              text='Inventory Management',
                              font=('Georgia', 16, 'bold'),
@@ -161,13 +275,11 @@ def show_main_menu():
                              highlightthickness=0)
     sub_inventory.pack(pady=0, anchor='center')
 
-    # input field
     main_menu = tk.Frame(master=window,
                          bg=bg_color,
                          bd=0,
                          highlightthickness=0)
 
-    # buttons
     button_place_order = ttk.Button(master=main_menu,
                                     text='Place Order',
                                     command=place_order,
@@ -188,7 +300,6 @@ def show_main_menu():
                                       command=remove_flavor,
                                       style='TPC_button.TButton')
 
-    # packing buttons
     button_place_order.pack(side=tk.LEFT, padx=10, pady=10)
     button_review_order.pack(side=tk.LEFT, padx=10, pady=10)
     button_add_flavor.pack(side=tk.LEFT, padx=10, pady=10)
@@ -204,8 +315,5 @@ style.configure('TPC_button.TButton',
                 background="#ADADAD",
                 padx=10)
 
-# load initial menu
 show_main_menu()
-
-# run main loop
 window.mainloop()
