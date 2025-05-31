@@ -5,7 +5,7 @@ import sqlite3
 # main window
 window = tk.Tk()
 window.title('TPC App')
-window.geometry('800x600')
+window.geometry('1100x925')
 bg_color = '#a3b18a'
 window.configure(bg=bg_color)
 
