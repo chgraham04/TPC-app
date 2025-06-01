@@ -36,7 +36,7 @@ def place_order():
               command=lambda: load_flavor_form("cfFlavors", "cold fusion")).pack(pady=10)
 
 def load_vendor_selection():
-    clear_window()
+    clear_window() 
     tk.Label(window, text="Select Ice Cream Vendor", font=('Georgia', 20), bg=bg_color).pack(pady=20)
     tk.Button(window, text="Crescent Ridge", font=('Georgia', 16),
               command=lambda: load_flavor_form("CrescentFlavors", "crescent ridge")).pack(pady=10)
