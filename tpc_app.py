@@ -385,61 +385,42 @@ def manage_payroll():
 def show_main_menu():
     clear_window()
 
+    # Main title
     title_label = tk.Label(master=window,
                            text='TPC Master Application',
                            font=('Georgia', 24),
                            bg=bg_color,
-                           fg='black',
-                           bd=0,
-                           highlightthickness=0)
-    title_label.pack(pady=(10, 50), anchor='center')
+                           fg='black')
+    title_label.pack(pady=(10, 50))
 
+    # Inventory section
     sub_inventory = tk.Label(master=window,
                              text='Inventory Management',
                              font=('Georgia', 16, 'bold'),
                              bg=bg_color,
-                             fg='black',
-                             bd=0,
-                             highlightthickness=0)
-    sub_inventory.pack(pady=0, anchor='center')
+                             fg='black')
+    sub_inventory.pack()
 
-    main_menu = tk.Frame(master=window,
-                         bg=bg_color,
-                         bd=0,
-                         highlightthickness=0)
+    inventory_menu = tk.Frame(master=window, bg=bg_color)
+    inventory_menu.pack(pady=10)
 
-    button_place_order = ttk.Button(master=main_menu,
-                                    text='Place Order',
-                                    command=place_order,
-                                    style='TPC_button.TButton')
+    ttk.Button(master=inventory_menu, text='Place Order', command=place_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(master=inventory_menu, text='Review Old Orders', command=review_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(master=inventory_menu, text='Add Flavor', command=add_flavor, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(master=inventory_menu, text='Remove Flavor', command=remove_flavor, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
 
-    button_review_order = ttk.Button(master=main_menu,
-                                     text='Review Old Orders',
-                                     command=review_order,
-                                     style='TPC_button.TButton')
+    # Payroll section header
+    sub_payroll = tk.Label(master=window,
+                           text='Manage Payroll',
+                           font=('Georgia', 16, 'bold'),
+                           bg=bg_color,
+                           fg='black')
+    sub_payroll.pack(pady=(40, 10))
 
-    button_add_flavor = ttk.Button(master=main_menu,
-                                   text='Add Flavor',
-                                   command=add_flavor,
-                                   style='TPC_button.TButton')
+    payroll_menu = tk.Frame(master=window, bg=bg_color)
+    payroll_menu.pack(pady=10)
 
-    button_remove_flavor = ttk.Button(master=main_menu,
-                                      text='Remove Flavor',
-                                      command=remove_flavor,
-                                      style='TPC_button.TButton')
-    
-    button_manage_payroll = ttk.Button(master=main_menu,
-                                      text='Manage Payroll',
-                                      command=manage_payroll,
-                                      style='TPC_button.TButton')
-
-
-    button_place_order.pack(side=tk.LEFT, padx=10, pady=10)
-    button_review_order.pack(side=tk.LEFT, padx=10, pady=10)
-    button_add_flavor.pack(side=tk.LEFT, padx=10, pady=10)
-    button_remove_flavor.pack(side=tk.LEFT, padx=10, pady=10)
-    button_manage_payroll.pack(side = tk.LEFT, padx=10, pady=10)
-    main_menu.pack(pady=0)
+    ttk.Button(master=payroll_menu, text='Manage Payroll', command=manage_payroll, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
 
 style = ttk.Style()
 style.theme_use('default')
