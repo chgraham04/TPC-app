@@ -9,6 +9,29 @@ window.geometry('1100x925')
 bg_color = '#a3b18a'
 window.configure(bg=bg_color)
 
+def init_payroll_tables():
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS Employee (
+        employee_id INTEGER PRIMARY KEY,
+        f_name TEXT NOT NULL,
+        l_name TEXT NOT NULL,
+        wage REAL NOT NULL
+    )""")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS PayPeriods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER,
+        pay_period TEXT,
+        hours_worked REAL,
+        overtime_hours REAL,
+        sick_hours REAL,
+        FOREIGN KEY (employee_id) REFERENCES Employee(employee_id)
+    )""")
+    conn.commit()
+    conn.close()
+
 # clear window helper
 def clear_window():
     for widget in window.winfo_children():
@@ -337,6 +360,28 @@ def remove_flavor():
     tk.Button(window, text="Cold Fusion", font=('Georgia', 16), command=lambda: vendor_choice("cfFlavors", "cold fusion")).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
 
+def manage_payroll():
+    clear_window()
+    tk.Label(window, text="Payroll Management", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    def view_employees():
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM Employee ORDER BY employee_id")
+        rows = cur.fetchall()
+        conn.close()
+
+        text = tk.Text(window, height=20, width=80, font=('Georgia', 12))
+        text.pack()
+        text.insert("end", f"{'ID':<5}{'First':<15}{'Last':<15}{'Wage':<10}\n")
+        text.insert("end", "-" * 60 + "\n")
+        for row in rows:
+            eid, f, l, w = row
+            text.insert("end", f"{eid:<5}{f:<15}{l:<15}${w:<10.2f}\n")
+
+    tk.Button(window, text="View Employees", font=('Georgia', 14), command=view_employees).pack(pady=10)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=10)
+
 def show_main_menu():
     clear_window()
 
@@ -382,11 +427,18 @@ def show_main_menu():
                                       text='Remove Flavor',
                                       command=remove_flavor,
                                       style='TPC_button.TButton')
+    
+    button_manage_payroll = ttk.Button(master=main_menu,
+                                      text='Manage Payroll',
+                                      command=manage_payroll,
+                                      style='TPC_button.TButton')
+
 
     button_place_order.pack(side=tk.LEFT, padx=10, pady=10)
     button_review_order.pack(side=tk.LEFT, padx=10, pady=10)
     button_add_flavor.pack(side=tk.LEFT, padx=10, pady=10)
     button_remove_flavor.pack(side=tk.LEFT, padx=10, pady=10)
+    button_manage_payroll.pack(side = tk.LEFT, padx=10, pady=10)
     main_menu.pack(pady=0)
 
 style = ttk.Style()
