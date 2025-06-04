@@ -382,6 +382,83 @@ def manage_payroll():
     tk.Button(window, text="View Employees", font=('Georgia', 14), command=view_employees).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=10)
 
+def add_employee():
+    clear_window()
+    tk.Label(window, text="Add New Employee", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    tk.Label(window, text="First Name:", font=('Georgia', 14), bg=bg_color).pack()
+    fname_entry = tk.Entry(window, font=('Georgia', 12))
+    fname_entry.pack()
+
+    tk.Label(window, text="Last Name:", font=('Georgia', 14), bg=bg_color).pack()
+    lname_entry = tk.Entry(window, font=('Georgia', 12))
+    lname_entry.pack()
+
+    tk.Label(window, text="Wage (per hour):", font=('Georgia', 14), bg=bg_color).pack()
+    wage_entry = tk.Entry(window, font=('Georgia', 12))
+    wage_entry.pack()
+
+    def save_employee():
+        fname = fname_entry.get().strip()
+        lname = lname_entry.get().strip()
+        try:
+            wage = float(wage_entry.get().strip())
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Wage must be a number.")
+            return
+
+        if not fname or not lname:
+            messagebox.showerror("Missing Fields", "First and Last name are required.")
+            return
+
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute("INSERT INTO Employee (f_name, l_name, wage) VALUES (?, ?, ?)",
+                    (fname, lname, wage))
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Success", "Employee added successfully!")
+        show_main_menu()
+
+    tk.Button(window, text="Save Employee", font=('Georgia', 14), command=save_employee).pack(pady=10)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
+
+def view_employees_scrollable():
+    clear_window()
+    tk.Label(window, text="Employee List", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Header row
+    header = tk.Label(scrollable_frame, text=f"{'ID':<5}{'First':<15}{'Last':<15}{'Wage':<10}",
+                      font=('Georgia', 12, 'bold'), bg=bg_color)
+    header.pack(anchor='w', padx=40)
+
+    # Fetch and display employees
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM Employee ORDER BY employee_id")
+    rows = cur.fetchall()
+    conn.close()
+
+    for row in rows:
+        eid, f, l, w = row
+        text = f"{eid:<5}{f:<15}{l:<15}${w:<10.2f}"
+        tk.Label(scrollable_frame, text=text, font=('Georgia', 12), bg=bg_color).pack(anchor='w', padx=40)
+
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
+
 def show_main_menu():
     clear_window()
 
@@ -420,7 +497,8 @@ def show_main_menu():
     payroll_menu = tk.Frame(master=window, bg=bg_color)
     payroll_menu.pack(pady=10)
 
-    ttk.Button(master=payroll_menu, text='Manage Payroll', command=manage_payroll, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(master=payroll_menu, text='View Employee List', command=view_employees_scrollable, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(master=payroll_menu, text='Add Employee', command=add_employee, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
 
 style = ttk.Style()
 style.theme_use('default')
@@ -431,4 +509,5 @@ style.configure('TPC_button.TButton',
                 padx=10)
 
 show_main_menu()
+init_payroll_tables()
 window.mainloop()
