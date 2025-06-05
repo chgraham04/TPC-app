@@ -9,6 +9,17 @@ window.geometry('1100x925')
 bg_color = '#a3b18a'
 window.configure(bg=bg_color)
 
+def update_flavor_tables():
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    for table in ["WarwickFlavors", "CrescentFlavors", "cfFlavors"]:
+        try:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN unit_price REAL")
+        except:
+            pass  
+    conn.commit()
+    conn.close()
+
 def init_payroll_tables():
     conn = sqlite3.connect("icecream_orders.db")
     cur = conn.cursor()
@@ -271,16 +282,31 @@ def add_flavor():
     def vendor_choice(vendor_table, vendor_label):
         clear_window()
         tk.Label(window, text=f"Adding to {vendor_label.title()}", font=('Georgia', 20), bg=bg_color).pack(pady=20)
-        tk.Label(window, text="Enter Flavor Name:", font=('Georgia', 14), bg=bg_color).pack(pady=10)
 
-        entry = tk.Entry(window, font=('Georgia', 12), justify='center')
-        entry.pack()
+        tk.Label(window, text="Enter Flavor Name:", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+        name_entry = tk.Entry(window, font=('Georgia', 12))
+        name_entry.pack()
+
+        # 🔧 NEW: Ask for unit price
+        tk.Label(window, text="Enter Unit Price (e.g., 4.50):", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+        price_entry = tk.Entry(window, font=('Georgia', 12))
+        price_entry.pack()
 
         def confirm_add():
-            name = entry.get().strip()
+            name = name_entry.get().strip()
+            price_str = price_entry.get().strip()
+
             if not name:
                 messagebox.showerror("Input Error", "Flavor name cannot be blank")
                 return
+            try:
+                price = float(price_str)
+                if price < 0 or round(price, 2) != price:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Input Error", "Enter a valid price (e.g., 3.99)")
+                return
+
             flavor_id = name.lower().replace(" ", "_")
             flavor_type = "gelato" if vendor_table == "cfFlavors" else "ice cream"
 
@@ -292,15 +318,18 @@ def add_flavor():
                 conn.close()
                 return
 
-            cur.execute(f"INSERT INTO {vendor_table} (flavor_id, name, type) VALUES (?, ?, ?)",
-                        (flavor_id, name, flavor_type))
+            # 🔧 Insert with price
+            cur.execute(f"INSERT INTO {vendor_table} (flavor_id, name, type, unit_price) VALUES (?, ?, ?, ?)",
+                        (flavor_id, name, flavor_type, price))
             conn.commit()
             conn.close()
+            messagebox.showinfo("Success", "Flavor added successfully!")
             show_main_menu()
 
         tk.Button(window, text="Add Flavor", font=('Georgia', 14), command=confirm_add).pack(pady=10)
-        tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
+        tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
+    # Vendor selection buttons
     tk.Button(window, text="Warwick", font=('Georgia', 16), command=lambda: vendor_choice("WarwickFlavors", "warwick")).pack(pady=10)
     tk.Button(window, text="Crescent Ridge", font=('Georgia', 16), command=lambda: vendor_choice("CrescentFlavors", "crescent ridge")).pack(pady=10)
     tk.Button(window, text="Cold Fusion", font=('Georgia', 16), command=lambda: vendor_choice("cfFlavors", "cold fusion")).pack(pady=10)
@@ -459,55 +488,45 @@ def view_employees_scrollable():
 
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
 
+def manage_flavors_menu():
+    clear_window()
+    tk.Label(window, text="Manage Flavors", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    tk.Button(window, text="Add Flavor", font=('Georgia', 14), command=add_flavor).pack(pady=10)
+    tk.Button(window, text="Remove Flavor", font=('Georgia', 14), command=remove_flavor).pack(pady=10)
+    tk.Button(window, text="Browse All Flavors", font=('Georgia', 14),
+              command=lambda: messagebox.showinfo("Coming Soon", "Browse All Flavors will be implemented next.")).pack(pady=10)
+    tk.Button(window, text="Edit Existing Flavor", font=('Georgia', 14),
+              command=lambda: messagebox.showinfo("Coming Soon", "Edit Flavor will be implemented next.")).pack(pady=10)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
+
 def show_main_menu():
     clear_window()
-
-    # Main title
-    title_label = tk.Label(master=window,
-                           text='TPC Master Application',
-                           font=('Georgia', 24),
-                           bg=bg_color,
-                           fg='black')
-    title_label.pack(pady=(10, 50))
+    tk.Label(window, text='TPC Master Application', font=('Georgia', 24), bg=bg_color).pack(pady=(10, 50))
 
     # Inventory section
-    sub_inventory = tk.Label(master=window,
-                             text='Inventory Management',
-                             font=('Georgia', 16, 'bold'),
-                             bg=bg_color,
-                             fg='black')
-    sub_inventory.pack()
-
-    inventory_menu = tk.Frame(master=window, bg=bg_color)
+    tk.Label(window, text='Inventory Management', font=('Georgia', 16, 'bold'), bg=bg_color).pack()
+    inventory_menu = tk.Frame(window, bg=bg_color)
     inventory_menu.pack(pady=10)
 
-    ttk.Button(master=inventory_menu, text='Place Order', command=place_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
-    ttk.Button(master=inventory_menu, text='Review Old Orders', command=review_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
-    ttk.Button(master=inventory_menu, text='Add Flavor', command=add_flavor, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
-    ttk.Button(master=inventory_menu, text='Remove Flavor', command=remove_flavor, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(inventory_menu, text='Place Order', command=place_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(inventory_menu, text='Review Old Orders', command=review_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(inventory_menu, text='Manage Flavors', command=manage_flavors_menu, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
 
-    # Payroll section header
-    sub_payroll = tk.Label(master=window,
-                           text='Manage Payroll',
-                           font=('Georgia', 16, 'bold'),
-                           bg=bg_color,
-                           fg='black')
-    sub_payroll.pack(pady=(40, 10))
-
-    payroll_menu = tk.Frame(master=window, bg=bg_color)
+    # Payroll section (unchanged)
+    tk.Label(window, text='Manage Payroll', font=('Georgia', 16, 'bold'), bg=bg_color).pack(pady=(40, 10))
+    payroll_menu = tk.Frame(window, bg=bg_color)
     payroll_menu.pack(pady=10)
 
-    ttk.Button(master=payroll_menu, text='View Employee List', command=view_employees_scrollable, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
-    ttk.Button(master=payroll_menu, text='Add Employee', command=add_employee, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10, pady=10)
+    ttk.Button(payroll_menu, text='View Employee List', command=view_employees_scrollable, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(payroll_menu, text='Add Employee', command=add_employee, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
 
+# Style setup
 style = ttk.Style()
 style.theme_use('default')
-style.configure('TPC_button.TButton',
-                font=('Georgia', 14),
-                foreground='black',
-                background="#ADADAD",
-                padx=10)
+style.configure('TPC_button.TButton', font=('Georgia', 14), foreground='black', background="#ADADAD", padx=10)
 
 show_main_menu()
 init_payroll_tables()
+update_flavor_tables()
 window.mainloop()
