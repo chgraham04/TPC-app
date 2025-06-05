@@ -43,12 +43,10 @@ def init_payroll_tables():
     conn.commit()
     conn.close()
 
-# clear window helper
 def clear_window():
     for widget in window.winfo_children():
         widget.destroy()
 
-# validate MM-DD-YYYY format
 def is_valid_date(date_str):
     parts = date_str.split("-")
     if len(parts) != 3:
@@ -61,7 +59,6 @@ def is_valid_date(date_str):
     mm, dd = int(mm), int(dd)
     return 1 <= mm <= 12 and 1 <= dd <= 31
 
-# button functionality
 def place_order():
     clear_window()
     tk.Label(window, text="Select Product Type", font=('Georgia', 20), bg=bg_color).pack(pady=20)
@@ -157,23 +154,19 @@ def load_flavor_form(table_name, vendor_name):
     tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5, padx=(290,0), anchor='center')
 
 def review_order():
-    clear_window()
+    def show_orders_page(rows):
+        clear_window()
 
-    def show_orders(rows):
-        # Create a container frame that will hold the scrollable canvas
         container = tk.Frame(window)
         container.pack(fill="both", expand=True)
 
-        # Create a canvas and scrollbar inside that container
         canvas = tk.Canvas(container, bg=bg_color)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Make the canvas fill the container
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # Create an inner frame ("scrollable_frame") inside the canvas
         scrollable_frame = tk.Frame(canvas, bg=bg_color)
         scrollable_frame.bind(
             "<Configure>",
@@ -181,15 +174,15 @@ def review_order():
         )
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 
-        # Title at top, centered
+        # Title
         tk.Label(
             scrollable_frame,
             text="Reviewing Orders",
             font=('Georgia', 20),
             bg=bg_color
-        ).pack(pady=20, anchor='center')
+        ).pack(pady=20, anchor='w', padx=50)
 
-        # Fetch flavor‐ID→name mappings once, outside of the loop
+        # Flavor mappings
         conn = sqlite3.connect("icecream_orders.db")
         cur = conn.cursor()
         cur.execute("SELECT flavor_id, name FROM WarwickFlavors")
@@ -202,10 +195,8 @@ def review_order():
 
         last_order = None
         for order_id, date, vendor, fid, qty in rows:
-            # Whenever we see a new order_id, insert a blank line (after the very first) and a header
             if order_id != last_order:
                 if last_order is not None:
-                    # blank spacer between orders
                     tk.Label(scrollable_frame, text="", bg=bg_color).pack()
                 header_text = f"Date: {date}  |  Vendor: {vendor.title()}"
                 tk.Label(
@@ -213,26 +204,25 @@ def review_order():
                     text=header_text,
                     font=('Georgia', 14, 'bold'),
                     bg=bg_color
-                ).pack(pady=(10, 2), anchor='center')
+                ).pack(pady=(10, 2), anchor='w', padx=50)
                 last_order = order_id
 
-            # Look up the flavor name from any of the three vendor dicts
             name = warwick.get(fid) or crescent.get(fid) or cf.get(fid) or "Unknown"
-            line_text = f"{name}  –  Qty: {qty}"
+            line_text = f"{name}  –  {qty}"
             tk.Label(
                 scrollable_frame,
                 text=line_text,
                 font=('Georgia', 12),
                 bg=bg_color
-            ).pack(anchor='center')
+            ).pack(anchor='w', padx=50)
 
-        # “Back to Menu” button at bottom, centered
+        # Back button at bottom
         tk.Button(
             scrollable_frame,
             text="Back to Menu",
             font=('Georgia', 12),
             command=show_main_menu
-        ).pack(pady=20, anchor='center')
+        ).pack(pady=30)
 
     def fetch_orders(date=None):
         conn = sqlite3.connect("icecream_orders.db")
@@ -256,7 +246,23 @@ def review_order():
             """)
         rows = cur.fetchall()
         conn.close()
-        show_orders(rows)
+        show_orders_page(rows)
+
+    def fetch_orders_by_date():
+        clear_window()
+        tk.Label(window, text="Enter Date to Search (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+        entry = tk.Entry(window, font=('Georgia', 12), justify='center')
+        entry.pack()
+
+        def run_search():
+            date = entry.get().strip()
+            if is_valid_date(date):
+                fetch_orders(date)
+            else:
+                messagebox.showerror("Invalid Date", "Please enter date as MM-DD-YYYY")
+
+        tk.Button(window, text="Search", font=('Georgia', 14), command=run_search).pack(pady=10)
+        tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
     def delete_orders():
         clear_window()
@@ -291,31 +297,13 @@ def review_order():
         tk.Button(window, text="Delete", font=('Georgia', 14), command=perform_delete).pack(pady=10)
         tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
-    # ---- Main “Review Orders” menu ----
+    # Main review orders menu
     clear_window()
     tk.Label(window, text="Review Orders Menu", font=('Georgia', 20), bg=bg_color).pack(pady=20)
-
-    # “View All Orders” button now calls fetch_orders(None)
     tk.Button(window, text="View All Orders", font=('Georgia', 14), command=lambda: fetch_orders()).pack(pady=10)
-    tk.Button(window, text="Find by Date", font=('Georgia', 14), command=lambda: fetch_orders_by_date()).pack(pady=10)
+    tk.Button(window, text="Find by Date", font=('Georgia', 14), command=fetch_orders_by_date).pack(pady=10)
     tk.Button(window, text="Delete Orders", font=('Georgia', 14), command=delete_orders).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
-
-    def fetch_orders_by_date():
-        clear_window()
-        tk.Label(window, text="Enter Date to Search (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=10)
-        entry = tk.Entry(window, font=('Georgia', 12), justify='center')
-        entry.pack()
-
-        def run_search():
-            date = entry.get().strip()
-            if is_valid_date(date):
-                fetch_orders(date)
-            else:
-                messagebox.showerror("Invalid Date", "Please enter date as MM-DD-YYYY")
-
-        tk.Button(window, text="Search", font=('Georgia', 14), command=run_search).pack(pady=10)
-        tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
 def add_flavor():
     clear_window()
