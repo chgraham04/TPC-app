@@ -160,21 +160,36 @@ def review_order():
     clear_window()
 
     def show_orders(rows):
-        canvas_frame = tk.Frame(window)
-        canvas = tk.Canvas(canvas_frame, bg=bg_color)
-        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
-        scrollable = tk.Frame(canvas, bg=bg_color)
+        # Create a container frame that will hold the scrollable canvas
+        container = tk.Frame(window)
+        container.pack(fill="both", expand=True)
 
-        scrollable.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scrollable, anchor="nw")
+        # Create a canvas and scrollbar inside that container
+        canvas = tk.Canvas(container, bg=bg_color)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        canvas_frame.pack(fill="both", expand=True)
+        # Make the canvas fill the container
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        tk.Label(scrollable, text="Reviewing Orders", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+        # Create an inner frame ("scrollable_frame") inside the canvas
+        scrollable_frame = tk.Frame(canvas, bg=bg_color)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 
+        # Title at top, centered
+        tk.Label(
+            scrollable_frame,
+            text="Reviewing Orders",
+            font=('Georgia', 20),
+            bg=bg_color
+        ).pack(pady=20, anchor='center')
+
+        # Fetch flavor‐ID→name mappings once, outside of the loop
         conn = sqlite3.connect("icecream_orders.db")
         cur = conn.cursor()
         cur.execute("SELECT flavor_id, name FROM WarwickFlavors")
@@ -183,34 +198,60 @@ def review_order():
         crescent = dict(cur.fetchall())
         cur.execute("SELECT flavor_id, name FROM cfFlavors")
         cf = dict(cur.fetchall())
+        conn.close()
 
         last_order = None
         for order_id, date, vendor, fid, qty in rows:
+            # Whenever we see a new order_id, insert a blank line (after the very first) and a header
             if order_id != last_order:
                 if last_order is not None:
-                    tk.Label(scrollable, text="", bg=bg_color).pack()
-                tk.Label(scrollable, text=f"Date: {date} | Vendor: {vendor}", font=('Georgia', 14, 'bold'), bg=bg_color).pack()
+                    # blank spacer between orders
+                    tk.Label(scrollable_frame, text="", bg=bg_color).pack()
+                header_text = f"Date: {date}  |  Vendor: {vendor.title()}"
+                tk.Label(
+                    scrollable_frame,
+                    text=header_text,
+                    font=('Georgia', 14, 'bold'),
+                    bg=bg_color
+                ).pack(pady=(10, 2), anchor='center')
                 last_order = order_id
 
+            # Look up the flavor name from any of the three vendor dicts
             name = warwick.get(fid) or crescent.get(fid) or cf.get(fid) or "Unknown"
-            tk.Label(scrollable, text=f"{name} - {qty}", font=('Georgia', 12), bg=bg_color).pack()
+            line_text = f"{name}  –  Qty: {qty}"
+            tk.Label(
+                scrollable_frame,
+                text=line_text,
+                font=('Georgia', 12),
+                bg=bg_color
+            ).pack(anchor='center')
 
-        tk.Button(scrollable, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=10)
-        conn.close()
+        # “Back to Menu” button at bottom, centered
+        tk.Button(
+            scrollable_frame,
+            text="Back to Menu",
+            font=('Georgia', 12),
+            command=show_main_menu
+        ).pack(pady=20, anchor='center')
 
     def fetch_orders(date=None):
         conn = sqlite3.connect("icecream_orders.db")
         cur = conn.cursor()
         if date:
             cur.execute("""
-                SELECT Orders.order_id, Orders.date, Orders.vendor, OrderDetails.flavor_id, OrderDetails.quantity
-                FROM Orders JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
-                WHERE Orders.date = ? ORDER BY Orders.order_id
+                SELECT Orders.order_id, Orders.date, Orders.vendor,
+                       OrderDetails.flavor_id, OrderDetails.quantity
+                FROM Orders
+                JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
+                WHERE Orders.date = ?
+                ORDER BY Orders.order_id
             """, (date,))
         else:
             cur.execute("""
-                SELECT Orders.order_id, Orders.date, Orders.vendor, OrderDetails.flavor_id, OrderDetails.quantity
-                FROM Orders JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
+                SELECT Orders.order_id, Orders.date, Orders.vendor,
+                       OrderDetails.flavor_id, OrderDetails.quantity
+                FROM Orders
+                JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
                 ORDER BY Orders.order_id
             """)
         rows = cur.fetchall()
@@ -226,7 +267,6 @@ def review_order():
         date_entry.pack()
 
         tk.Label(window, text="Select Vendor:", font=('Georgia', 14), bg=bg_color).pack(pady=10)
-
         vendor_var = tk.StringVar(value="crescent ridge")
         for vendor in ["crescent ridge", "warwick", "cold fusion"]:
             ttk.Radiobutton(window, text=vendor.title(), variable=vendor_var, value=vendor).pack(anchor='center')
@@ -241,7 +281,7 @@ def review_order():
             cur = conn.cursor()
             cur.execute("SELECT order_id FROM Orders WHERE date = ? AND vendor = ?", (date, vendor))
             matches = cur.fetchall()
-            for oid, in matches:
+            for (oid,) in matches:
                 cur.execute("DELETE FROM OrderDetails WHERE order_id = ?", (oid,))
                 cur.execute("DELETE FROM Orders WHERE order_id = ?", (oid,))
             conn.commit()
@@ -251,9 +291,11 @@ def review_order():
         tk.Button(window, text="Delete", font=('Georgia', 14), command=perform_delete).pack(pady=10)
         tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
+    # ---- Main “Review Orders” menu ----
     clear_window()
     tk.Label(window, text="Review Orders Menu", font=('Georgia', 20), bg=bg_color).pack(pady=20)
 
+    # “View All Orders” button now calls fetch_orders(None)
     tk.Button(window, text="View All Orders", font=('Georgia', 14), command=lambda: fetch_orders()).pack(pady=10)
     tk.Button(window, text="Find by Date", font=('Georgia', 14), command=lambda: fetch_orders_by_date()).pack(pady=10)
     tk.Button(window, text="Delete Orders", font=('Georgia', 14), command=delete_orders).pack(pady=10)
