@@ -20,6 +20,16 @@ def update_flavor_tables():
     conn.commit()
     conn.close()
 
+def update_orders_table():
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    try:
+        cur.execute("ALTER TABLE Orders ADD COLUMN total REAL")
+    except:
+        pass
+    conn.commit()
+    conn.close()
+
 def init_payroll_tables():
     conn = sqlite3.connect("icecream_orders.db")
     cur = conn.cursor()
@@ -65,7 +75,7 @@ def place_order():
     tk.Button(window, text="Ice Cream", font=('Georgia', 16), command=load_vendor_selection).pack(pady=10)
     tk.Button(window, text="Gelato", font=('Georgia', 16),
               command=lambda: load_flavor_form("cfFlavors", "cold fusion")).pack(pady=10)
-
+    
 def load_vendor_selection():
     clear_window() 
     tk.Label(window, text="Select Ice Cream Vendor", font=('Georgia', 20), bg=bg_color).pack(pady=20)
@@ -82,11 +92,7 @@ def load_flavor_form(table_name, vendor_name):
     scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
     scrollable_frame = tk.Frame(canvas, bg=bg_color)
 
-    scrollable_frame.bind(
-        "<Configure>",
-        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
-
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -94,8 +100,7 @@ def load_flavor_form(table_name, vendor_name):
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
 
-    header = tk.Label(scrollable_frame, text=f"{vendor_name.title()} Order", font=('Georgia', 20), bg=bg_color)
-    header.pack(pady=10, padx=(290,0), anchor='center')
+    tk.Label(scrollable_frame, text=f"{vendor_name.title()} Order", font=('Georgia', 20), bg=bg_color).pack(pady=10)
 
     conn = sqlite3.connect("icecream_orders.db")
     cur = conn.cursor()
@@ -105,25 +110,19 @@ def load_flavor_form(table_name, vendor_name):
 
     entry_widgets = {}
     for fid, name in flavors:
-        row_outer = tk.Frame(scrollable_frame, bg=bg_color)
-        row_outer.pack(anchor='center', pady=2)
-
-        row = tk.Frame(row_outer, bg=bg_color)
-        row.pack()
-
+        row = tk.Frame(scrollable_frame, bg=bg_color)
+        row.pack(anchor='center', pady=2)
         tk.Label(row, text=name, width=30, anchor='e', font=('Georgia', 12), bg=bg_color).pack(side='left')
         entry = tk.Entry(row, width=5, justify='center')
         entry.pack(side='left')
         entry_widgets[fid] = entry
 
-    date_label = tk.Label(scrollable_frame, text="Enter Order Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color)
-    date_label.pack(pady=(20, 5), padx=(290,0), anchor='center')
-
+    tk.Label(scrollable_frame, text="Enter Order Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=(20, 5))
     date_entry = tk.Entry(scrollable_frame, font=('Georgia', 12), justify='center')
-    date_entry.pack(anchor='center', padx=(290,0))
+    date_entry.pack()
 
     err_label = tk.Label(scrollable_frame, text="", font=('Georgia', 10), fg="red", bg=bg_color)
-    err_label.pack(anchor='center', padx=(290,0))
+    err_label.pack()
 
     def finalize_order():
         date_str = date_entry.get().strip()
@@ -136,61 +135,66 @@ def load_flavor_form(table_name, vendor_name):
         cur.execute("INSERT INTO Orders (date, vendor) VALUES (?, ?)", (date_str, vendor_name))
         order_id = cur.lastrowid
 
+        total_price = 0.0
+
         for fid, entry in entry_widgets.items():
             qty_str = entry.get()
             try:
                 qty = int(qty_str) if qty_str.strip() else 0
                 if qty > 0:
+                    cur.execute(f"SELECT unit_price FROM {table_name} WHERE flavor_id = ?", (fid,))
+                    result = cur.fetchone()
+                    unit_price = result[0] if result else 0
+                    total_price += unit_price * qty
                     cur.execute("INSERT INTO OrderDetails (order_id, flavor_id, quantity) VALUES (?, ?, ?)",
                                 (order_id, fid, qty))
             except ValueError:
                 pass
 
+        cur.execute("UPDATE Orders SET total = ? WHERE order_id = ?", (total_price, order_id))
         conn.commit()
         conn.close()
         show_main_menu()
 
-    tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20, padx=(290,0), anchor='center')
-    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5, padx=(290,0), anchor='center')
+    tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20)
+    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
 
 def review_order():
     def show_orders_page(rows):
         clear_window()
 
         container = tk.Frame(window)
-        container.pack(fill="both", expand=True)
-
         canvas = tk.Canvas(container, bg=bg_color)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
+        container.pack(fill="both", expand=True)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        scrollable_frame = tk.Frame(canvas, bg=bg_color)
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        tk.Label(scrollable_frame, text="Reviewing Orders", font=('Georgia', 20), bg=bg_color).pack(pady=20, anchor='w', padx=50)
 
-        # Title
-        tk.Label(
-            scrollable_frame,
-            text="Reviewing Orders",
-            font=('Georgia', 20),
-            bg=bg_color
-        ).pack(pady=20, anchor='w', padx=50)
-
-        # Flavor mappings
         conn = sqlite3.connect("icecream_orders.db")
         cur = conn.cursor()
+
+        # Pre-load flavor name dictionaries
         cur.execute("SELECT flavor_id, name FROM WarwickFlavors")
         warwick = dict(cur.fetchall())
         cur.execute("SELECT flavor_id, name FROM CrescentFlavors")
         crescent = dict(cur.fetchall())
         cur.execute("SELECT flavor_id, name FROM cfFlavors")
         cf = dict(cur.fetchall())
+
+        # Pre-load order totals
+        orders_total_lookup = {}
+        cur.execute("SELECT order_id, total FROM Orders")
+        for oid, total in cur.fetchall():
+            orders_total_lookup[oid] = total if total is not None else 0.00
+
         conn.close()
 
         last_order = None
@@ -198,31 +202,17 @@ def review_order():
             if order_id != last_order:
                 if last_order is not None:
                     tk.Label(scrollable_frame, text="", bg=bg_color).pack()
-                header_text = f"Date: {date}  |  Vendor: {vendor.title()}"
-                tk.Label(
-                    scrollable_frame,
-                    text=header_text,
-                    font=('Georgia', 14, 'bold'),
-                    bg=bg_color
-                ).pack(pady=(10, 2), anchor='w', padx=50)
+                total_str = f"${orders_total_lookup.get(order_id, 0.00):.2f}"
+                header_text = f"Date: {date}  |  Vendor: {vendor.title()}  |  Total: {total_str}"
+                tk.Label(scrollable_frame, text=header_text, font=('Georgia', 14, 'bold'), bg=bg_color).pack(pady=(10, 2), anchor='w', padx=50)
                 last_order = order_id
 
             name = warwick.get(fid) or crescent.get(fid) or cf.get(fid) or "Unknown"
             line_text = f"{name}  –  {qty}"
-            tk.Label(
-                scrollable_frame,
-                text=line_text,
-                font=('Georgia', 12),
-                bg=bg_color
-            ).pack(anchor='w', padx=50)
+            tk.Label(scrollable_frame, text=line_text, font=('Georgia', 12), bg=bg_color).pack(anchor='w', padx=50)
 
-        # Back button at bottom
-        tk.Button(
-            scrollable_frame,
-            text="Back to Menu",
-            font=('Georgia', 12),
-            command=show_main_menu
-        ).pack(pady=30)
+        tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
+
 
     def fetch_orders(date=None):
         conn = sqlite3.connect("icecream_orders.db")
@@ -559,4 +549,5 @@ style.configure('TPC_button.TButton', font=('Georgia', 14), foreground='black', 
 show_main_menu()
 init_payroll_tables()
 update_flavor_tables()
+update_orders_table()
 window.mainloop()
