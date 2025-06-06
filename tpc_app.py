@@ -443,6 +443,80 @@ def browse_all_flavors():
     conn.close()
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
 
+def edit_existing_flavor():
+    clear_window()
+    tk.Label(window, text="Select Vendor to Edit Flavors From", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    def choose_vendor(vendor_table, vendor_label):
+        clear_window()
+        tk.Label(window, text=f"Editing Flavors for {vendor_label.title()}", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+        container = tk.Frame(window)
+        canvas = tk.Canvas(container, bg=bg_color)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        container.pack(fill="both", expand=True)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute(f"SELECT flavor_id, name, unit_price FROM {vendor_table} ORDER BY name ASC")
+        flavors = cur.fetchall()
+        conn.close()
+
+        edits = {}
+
+        for fid, name, price in flavors:
+            row = tk.Frame(scrollable_frame, bg=bg_color)
+            row.pack(anchor='w', padx=20, pady=5)
+
+            tk.Label(row, text="Name:", font=('Georgia', 12), bg=bg_color).pack(side='left')
+            name_entry = tk.Entry(row, font=('Georgia', 12), width=25)
+            name_entry.insert(0, name)
+            name_entry.pack(side='left', padx=5)
+
+            tk.Label(row, text="Price:", font=('Georgia', 12), bg=bg_color).pack(side='left')
+            price_entry = tk.Entry(row, font=('Georgia', 12), width=8)
+            price_entry.insert(0, f"{price:.2f}" if price is not None else "0.00")
+            price_entry.pack(side='left')
+
+            edits[fid] = (name_entry, price_entry)
+
+        def save_edits():
+            conn = sqlite3.connect("icecream_orders.db")
+            cur = conn.cursor()
+            for fid, (name_entry, price_entry) in edits.items():
+                new_name = name_entry.get().strip()
+                try:
+                    new_price = float(price_entry.get().strip())
+                    if new_price < 0:
+                        raise ValueError
+                except ValueError:
+                    messagebox.showerror("Invalid Price", f"Invalid price entered for flavor ID: {fid}")
+                    conn.close()
+                    return
+                cur.execute(f"UPDATE {vendor_table} SET name = ?, unit_price = ? WHERE flavor_id = ?",
+                            (new_name, new_price, fid))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Success", "Flavors updated successfully!")
+            show_main_menu()
+
+        tk.Button(scrollable_frame, text="Save Changes", font=('Georgia', 14), command=save_edits).pack(pady=20)
+        tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
+
+    # Vendor selection buttons
+    tk.Button(window, text="Warwick", font=('Georgia', 16), command=lambda: choose_vendor("WarwickFlavors", "warwick")).pack(pady=10)
+    tk.Button(window, text="Crescent Ridge", font=('Georgia', 16), command=lambda: choose_vendor("CrescentFlavors", "crescent ridge")).pack(pady=10)
+    tk.Button(window, text="Cold Fusion", font=('Georgia', 16), command=lambda: choose_vendor("cfFlavors", "cold fusion")).pack(pady=10)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
+
 def manage_payroll():
     clear_window()
     tk.Label(window, text="Payroll Management", font=('Georgia', 20), bg=bg_color).pack(pady=20)
@@ -550,12 +624,9 @@ def manage_flavors_menu():
     tk.Button(window, text="Remove Flavor", font=('Georgia', 14), command=remove_flavor).pack(pady=10)
     tk.Button(window, text="Browse All Flavors", font=('Georgia', 14),
           command=browse_all_flavors).pack(pady=10)
-    tk.Button(window, text="Edit Existing Flavor", font=('Georgia', 14),
-              command=lambda: messagebox.showinfo("Coming Soon", "Edit Flavor will be implemented next.")).pack(pady=10)
+    tk.Button(window, text="Edit Existing Flavor", font=('Georgia', 14), command=edit_existing_flavor).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
     
-
-
 def show_main_menu():
     clear_window()
     tk.Label(window, text='TPC Master Application', font=('Georgia', 24), bg=bg_color).pack(pady=(10, 50))
