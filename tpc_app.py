@@ -50,6 +50,13 @@ def init_payroll_tables():
         sick_hours REAL,
         FOREIGN KEY (employee_id) REFERENCES Employee(employee_id)
     )""")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS PayrollSummary (
+        pay_period TEXT PRIMARY KEY,
+        total_payout REAL
+    );
+""")
+
     conn.commit()
     conn.close()
 
@@ -580,6 +587,176 @@ def add_employee():
     tk.Button(window, text="Save Employee", font=('Georgia', 14), command=save_employee).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
 
+def pay_employees():
+    clear_window()
+    tk.Label(window, text="Enter Pay Period Dates", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    tk.Label(window, text="Start Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack()
+    start_entry = tk.Entry(window, font=('Georgia', 12), justify='center')
+    start_entry.pack()
+
+    tk.Label(window, text="End Date (MM-DD-YYYY):", font=('Georgia', 14), bg=bg_color).pack(pady=5)
+    end_entry = tk.Entry(window, font=('Georgia', 12), justify='center')
+    end_entry.pack()
+
+    def proceed():
+        start = start_entry.get().strip()
+        end = end_entry.get().strip()
+        if not (is_valid_date(start) and is_valid_date(end)):
+            messagebox.showerror("Invalid Date", "Use MM-DD-YYYY for both dates.")
+            return
+        pay_period = f"{start} to {end}"
+        launch_payroll_form(pay_period)
+
+    tk.Button(window, text="Continue", font=('Georgia', 14), command=proceed).pack(pady=15)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack()
+
+def launch_payroll_form(pay_period):
+    clear_window()
+    tk.Label(window, text=f"Pay Employees ({pay_period})", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    cur.execute("SELECT employee_id, f_name, l_name, wage FROM Employee ORDER BY employee_id")
+    employees = cur.fetchall()
+    conn.close()
+
+    entries = {}
+    for eid, f, l, w in employees:
+        row = tk.Frame(scrollable_frame, bg=bg_color)
+        row.pack(anchor='w', pady=4, padx=30)
+        tk.Label(row, text=f"{f} {l} (${w:.2f}/hr)", font=('Georgia', 12), bg=bg_color).pack(side='left', padx=5)
+
+        hw_entry = tk.Entry(row, font=('Georgia', 12), width=8)
+        hw_entry.pack(side='left', padx=5)
+        tk.Label(row, text="hrs", bg=bg_color).pack(side='left')
+
+        ot_entry = tk.Entry(row, font=('Georgia', 12), width=8)
+        ot_entry.pack(side='left', padx=5)
+        tk.Label(row, text="OT", bg=bg_color).pack(side='left')
+
+        sick_entry = tk.Entry(row, font=('Georgia', 12), width=8)
+        sick_entry.pack(side='left', padx=5)
+        tk.Label(row, text="sick", bg=bg_color).pack(side='left')
+
+        entries[eid] = (hw_entry, ot_entry, sick_entry, w)
+
+    def submit_payroll():
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        total_payout = 0.0
+
+        for eid, (hw_entry, ot_entry, sick_entry, wage) in entries.items():
+            try:
+                hw = float(hw_entry.get().strip()) if hw_entry.get().strip() else 0.0
+                ot = float(ot_entry.get().strip()) if ot_entry.get().strip() else 0.0
+                sick = float(sick_entry.get().strip()) if sick_entry.get().strip() else 0.0
+                if hw < 0 or ot < 0 or sick < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid Input", f"Invalid entry for employee ID {eid}")
+                conn.close()
+                return
+
+            # Store record
+            cur.execute("""
+                INSERT INTO PayPeriods (employee_id, pay_period, hours_worked, overtime_hours, sick_hours)
+                VALUES (?, ?, ?, ?, ?)
+            """, (eid, pay_period, hw, ot, sick))
+
+            total_payout += wage * (hw + 1.5 * ot)
+
+        cur.execute("INSERT OR REPLACE INTO PayrollSummary (pay_period, total_payout) VALUES (?, ?)",
+                    (pay_period, total_payout))
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Success", f"Payroll submitted.\nTotal Payout: ${total_payout:.2f}")
+        show_main_menu()
+
+    tk.Button(scrollable_frame, text="Submit Payroll", font=('Georgia', 14), command=submit_payroll).pack(pady=20)
+    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
+
+def browse_pay_periods():
+    clear_window()
+    tk.Label(window, text="Payroll Summary", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    cur.execute("SELECT pay_period, total_payout FROM PayrollSummary ORDER BY pay_period DESC")
+    summaries = cur.fetchall()
+    conn.close()
+
+    for period, total in summaries:
+        label = f"{period}  –  Total Payout: ${total:.2f}"
+        tk.Label(scrollable_frame, text=label, font=('Georgia', 12), bg=bg_color).pack(anchor='w', padx=40, pady=3)
+
+    def open_delete_window():
+        clear_window()
+        tk.Label(window, text="Delete a Pay Period", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT pay_period FROM PayrollSummary ORDER BY pay_period DESC")
+        periods = [row[0] for row in cur.fetchall()]
+        conn.close()
+
+        if not periods:
+            tk.Label(window, text="No pay periods found.", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+            tk.Button(window, text="Back to Summary", font=('Georgia', 12), command=browse_pay_periods).pack()
+            return
+
+        tk.Label(window, text="Select Pay Period to Delete:", font=('Georgia', 14), bg=bg_color).pack(pady=10)
+
+        selected_period = tk.StringVar(value=periods[0])
+        dropdown = ttk.Combobox(window, textvariable=selected_period, values=periods, font=('Georgia', 12), state="readonly", width=35)
+        dropdown.pack(pady=5)
+
+        def confirm_delete():
+            period = selected_period.get()
+            if not period:
+                messagebox.showerror("Selection Error", "Please select a pay period.")
+                return
+            conn = sqlite3.connect("icecream_orders.db")
+            cur = conn.cursor()
+            cur.execute("DELETE FROM PayPeriods WHERE pay_period = ?", (period,))
+            cur.execute("DELETE FROM PayrollSummary WHERE pay_period = ?", (period,))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Success", f"Deleted pay period: {period}")
+            browse_pay_periods()
+
+        tk.Button(window, text="Delete", font=('Georgia', 14), command=confirm_delete).pack(pady=10)
+        tk.Button(window, text="Back to Summary", font=('Georgia', 12), command=browse_pay_periods).pack(pady=5)
+
+    tk.Button(window, text="Delete Pay Period", font=('Georgia', 14), command=open_delete_window).pack(pady=20)
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
+
 def view_employees_scrollable():
     clear_window()
     tk.Label(window, text="Employee List", font=('Georgia', 20), bg=bg_color).pack(pady=20)
@@ -598,23 +775,101 @@ def view_employees_scrollable():
     scrollbar.pack(side="right", fill="y")
 
     # Header row
-    header = tk.Label(scrollable_frame, text=f"{'ID':<5}{'First':<15}{'Last':<15}{'Wage':<10}",
-                      font=('Georgia', 12, 'bold'), bg=bg_color)
-    header.pack(anchor='w', padx=40)
+    headers = ["ID", "First", "Last", "Wage"]
+    for col, header in enumerate(headers):
+        tk.Label(scrollable_frame, text=header, font=('Georgia', 12, 'bold'),
+                 bg=bg_color, padx=20).grid(row=0, column=col, sticky='w', pady=(0, 10))
 
-    # Fetch and display employees
+    # Fetch and display employee rows
     conn = sqlite3.connect("icecream_orders.db")
     cur = conn.cursor()
     cur.execute("SELECT * FROM Employee ORDER BY employee_id")
     rows = cur.fetchall()
     conn.close()
 
-    for row in rows:
-        eid, f, l, w = row
-        text = f"{eid:<5}{f:<15}{l:<15}${w:<10.2f}"
-        tk.Label(scrollable_frame, text=text, font=('Georgia', 12), bg=bg_color).pack(anchor='w', padx=40)
+    for i, (eid, f, l, w) in enumerate(rows, start=1):
+        tk.Label(scrollable_frame, text=str(eid), font=('Georgia', 12), bg=bg_color, padx=20).grid(row=i, column=0, sticky='w')
+        tk.Label(scrollable_frame, text=f, font=('Georgia', 12), bg=bg_color, padx=20).grid(row=i, column=1, sticky='w')
+        tk.Label(scrollable_frame, text=l, font=('Georgia', 12), bg=bg_color, padx=20).grid(row=i, column=2, sticky='w')
+        tk.Label(scrollable_frame, text=f"${w:.2f}", font=('Georgia', 12), bg=bg_color, padx=20).grid(row=i, column=3, sticky='w')
 
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
+
+def edit_employees():
+    clear_window()
+    tk.Label(window, text="Edit Employee Information", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+    cur.execute("SELECT employee_id, f_name, l_name, wage FROM Employee ORDER BY employee_id")
+    employees = cur.fetchall()
+    conn.close()
+
+    edits = {}
+
+    for eid, f, l, w in employees:
+        row = tk.Frame(scrollable_frame, bg=bg_color)
+        row.pack(anchor='w', pady=4, padx=30)
+
+        tk.Label(row, text=f"ID {eid}", font=('Georgia', 12), bg=bg_color).pack(side='left', padx=5)
+
+        fname_entry = tk.Entry(row, font=('Georgia', 12), width=15)
+        fname_entry.insert(0, f)
+        fname_entry.pack(side='left', padx=5)
+
+        lname_entry = tk.Entry(row, font=('Georgia', 12), width=15)
+        lname_entry.insert(0, l)
+        lname_entry.pack(side='left', padx=5)
+
+        wage_entry = tk.Entry(row, font=('Georgia', 12), width=10)
+        wage_entry.insert(0, f"{w:.2f}")
+        wage_entry.pack(side='left', padx=5)
+
+        edits[eid] = (fname_entry, lname_entry, wage_entry)
+
+    def save_edits():
+        conn = sqlite3.connect("icecream_orders.db")
+        cur = conn.cursor()
+        for eid, (fname_entry, lname_entry, wage_entry) in edits.items():
+            fname = fname_entry.get().strip()
+            lname = lname_entry.get().strip()
+            try:
+                wage = float(wage_entry.get().strip())
+                if wage < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid Wage", f"Invalid wage entered for employee ID {eid}")
+                conn.close()
+                return
+
+            if not fname or not lname:
+                messagebox.showerror("Missing Fields", f"First and Last name required for ID {eid}")
+                conn.close()
+                return
+
+            cur.execute("""
+                UPDATE Employee SET f_name = ?, l_name = ?, wage = ? WHERE employee_id = ?
+            """, (fname, lname, wage, eid))
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Success", "Employee information updated successfully!")
+        show_main_menu()
+
+    tk.Button(scrollable_frame, text="Save Changes", font=('Georgia', 14), command=save_edits).pack(pady=20)
+    tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
 
 def manage_flavors_menu():
     clear_window()
@@ -635,18 +890,19 @@ def show_main_menu():
     tk.Label(window, text='Inventory Management', font=('Georgia', 16, 'bold'), bg=bg_color).pack()
     inventory_menu = tk.Frame(window, bg=bg_color)
     inventory_menu.pack(pady=10)
-
     ttk.Button(inventory_menu, text='Place Order', command=place_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
     ttk.Button(inventory_menu, text='Review Old Orders', command=review_order, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
     ttk.Button(inventory_menu, text='Manage Flavors', command=manage_flavors_menu, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
 
-    # Payroll section (unchanged)
+    # Payroll section
     tk.Label(window, text='Manage Payroll', font=('Georgia', 16, 'bold'), bg=bg_color).pack(pady=(40, 10))
     payroll_menu = tk.Frame(window, bg=bg_color)
     payroll_menu.pack(pady=10)
-
-    ttk.Button(payroll_menu, text='View Employee List', command=view_employees_scrollable, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(payroll_menu, text='Pay Employees', command=pay_employees, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(payroll_menu, text='Browse Pay Periods', command=browse_pay_periods, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
     ttk.Button(payroll_menu, text='Add Employee', command=add_employee, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(payroll_menu, text='View Employee List', command=view_employees_scrollable, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
+    ttk.Button(payroll_menu, text='Edit Employee Info', command=edit_employees, style='TPC_button.TButton').pack(side=tk.LEFT, padx=10)
 
 # Style setup
 style = ttk.Style()
