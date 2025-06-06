@@ -137,34 +137,43 @@ def load_flavor_form(table_name, vendor_name):
             err_label.config(text="Invalid date format. Use MM-DD-YYYY.")
             return
 
-        conn = sqlite3.connect("icecream_orders.db")
-        cur = conn.cursor()
-        cur.execute("INSERT INTO Orders (date, vendor) VALUES (?, ?)", (date_str, vendor_name))
-        order_id = cur.lastrowid
+        try:
+            conn = sqlite3.connect("icecream_orders.db", timeout=5)
+            cur = conn.cursor()
 
-        total_price = 0.0
+            cur.execute("INSERT INTO Orders (date, vendor) VALUES (?, ?)", (date_str, vendor_name))
+            order_id = cur.lastrowid
 
-        for fid, entry in entry_widgets.items():
-            qty_str = entry.get()
-            try:
-                qty = int(qty_str) if qty_str.strip() else 0
-                if qty > 0:
-                    cur.execute(f"SELECT unit_price FROM {table_name} WHERE flavor_id = ?", (fid,))
-                    result = cur.fetchone()
-                    unit_price = result[0] if result else 0
-                    total_price += unit_price * qty
-                    cur.execute("INSERT INTO OrderDetails (order_id, flavor_id, quantity) VALUES (?, ?, ?)",
-                                (order_id, fid, qty))
-            except ValueError:
-                pass
+            total_price = 0.0
 
-        cur.execute("UPDATE Orders SET total = ? WHERE order_id = ?", (total_price, order_id))
-        conn.commit()
-        conn.close()
+            for fid, entry in entry_widgets.items():
+                qty_str = entry.get()
+                try:
+                    qty = int(qty_str) if qty_str.strip() else 0
+                    if qty > 0:
+                        cur.execute(f"SELECT unit_price FROM {table_name} WHERE flavor_id = ?", (fid,))
+                        result = cur.fetchone()
+                        unit_price = result[0] if result and result[0] is not None else 0.0
+                        total_price += unit_price * qty
+                        cur.execute("INSERT INTO OrderDetails (order_id, flavor_id, quantity) VALUES (?, ?, ?)",
+                                    (order_id, fid, qty))
+                except ValueError:
+                    continue  # Ignore invalid quantity input
+
+            cur.execute("UPDATE Orders SET total = ? WHERE order_id = ?", (total_price, order_id))
+            conn.commit()
+
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", str(e))
+            return
+        finally:
+            conn.close()
+
         show_main_menu()
 
     tk.Button(scrollable_frame, text="Place Order", font=('Georgia', 14), command=finalize_order).pack(pady=20)
     tk.Button(scrollable_frame, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=5)
+
 
 def review_order():
     def show_orders_page(rows):
