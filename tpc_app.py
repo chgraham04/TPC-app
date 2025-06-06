@@ -409,6 +409,40 @@ def remove_flavor():
     tk.Button(window, text="Cold Fusion", font=('Georgia', 16), command=lambda: vendor_choice("cfFlavors", "cold fusion")).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
 
+def browse_all_flavors():
+    clear_window()
+    tk.Label(window, text="All Flavors by Vendor", font=('Georgia', 20), bg=bg_color).pack(pady=20)
+
+    container = tk.Frame(window)
+    canvas = tk.Canvas(container, bg=bg_color)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=bg_color)
+
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    container.pack(fill="both", expand=True)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    conn = sqlite3.connect("icecream_orders.db")
+    cur = conn.cursor()
+
+    for vendor_table, vendor_label in [("WarwickFlavors", "Warwick"),
+                                       ("CrescentFlavors", "Crescent Ridge"),
+                                       ("cfFlavors", "Cold Fusion")]:
+        tk.Label(scrollable_frame, text=vendor_label, font=('Georgia', 16, 'bold'), bg=bg_color).pack(pady=(15, 5), anchor='w', padx=40)
+        cur.execute(f"SELECT name, unit_price FROM {vendor_table} ORDER BY name ASC")
+        rows = cur.fetchall()
+        for name, price in rows:
+            price_str = f"${price:.2f}" if price is not None else "$0.00"
+            entry = f"{name}  -  {price_str}"
+            tk.Label(scrollable_frame, text=entry, font=('Georgia', 12), bg=bg_color).pack(anchor='w', padx=60)
+
+    conn.close()
+    tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).place(x=10, y=10)
+
 def manage_payroll():
     clear_window()
     tk.Label(window, text="Payroll Management", font=('Georgia', 20), bg=bg_color).pack(pady=20)
@@ -515,10 +549,12 @@ def manage_flavors_menu():
     tk.Button(window, text="Add Flavor", font=('Georgia', 14), command=add_flavor).pack(pady=10)
     tk.Button(window, text="Remove Flavor", font=('Georgia', 14), command=remove_flavor).pack(pady=10)
     tk.Button(window, text="Browse All Flavors", font=('Georgia', 14),
-              command=lambda: messagebox.showinfo("Coming Soon", "Browse All Flavors will be implemented next.")).pack(pady=10)
+          command=browse_all_flavors).pack(pady=10)
     tk.Button(window, text="Edit Existing Flavor", font=('Georgia', 14),
               command=lambda: messagebox.showinfo("Coming Soon", "Edit Flavor will be implemented next.")).pack(pady=10)
     tk.Button(window, text="Back to Menu", font=('Georgia', 12), command=show_main_menu).pack(pady=20)
+    
+
 
 def show_main_menu():
     clear_window()
